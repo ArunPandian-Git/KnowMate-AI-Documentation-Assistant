@@ -1,6 +1,4 @@
-!python -m venv venv --without-pip
-!source venv/bin/activate
-!pip install streamlit groq chromadb sentence-transformers pypdf
+
 #Import libraries
 import streamlit as st
 import chromadb
