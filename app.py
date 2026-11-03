@@ -308,21 +308,3 @@ if question:
 
 
 
-#gitignore
-!git init
-
-# Configure a local Git identity so the commit works
-!git config --local user.email "colab-user@example.com"
-!git config --local user.name "Colab User"
-
-!git add .
-
-!git commit -m "Initial KnowMate AI chatbot project"
-
-!git branch -M main
-
-# We use 'set-url' here since 'origin' was already created in your previous execution
-# IMPORTANT: Please change "YOUR_GITHUB_REPOSITORY_URL" to your actual GitHub URL!
-!git remote set-url origin YOUR_GITHUB_REPOSITORY_URL 2>/dev/null || !git remote add origin YOUR_GITHUB_REPOSITORY_URL
-
-!git push -u origin main
