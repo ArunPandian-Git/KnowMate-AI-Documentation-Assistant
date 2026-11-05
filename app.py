@@ -214,7 +214,7 @@ def generate_answer(question, context, history):
 
     return response.choices[0].message.content
 
-#app.py
+
 uploaded_files = st.file_uploader(
     "Upload PDF Documents",
     type=["pdf"],
