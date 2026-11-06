@@ -47,7 +47,7 @@ def get_groq_api_key():
 
     except Exception:
 
-        return os.environ.get("GROQ_API_KEY", "")
+        return os.environ.get("Knowmate AI", "")
 
 
 api_key = get_groq_api_key()
