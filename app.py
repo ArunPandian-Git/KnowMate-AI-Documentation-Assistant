@@ -2,6 +2,7 @@
 import streamlit as st
 import chromadb
 import hashlib
+import os
 
 from groq import Groq
 from pypdf import PdfReader
@@ -21,24 +22,21 @@ st.write(
     "using Artificial Intelligence."
 )
 
-#GROQ_API_KEY
-import os
+# Safely load the Groq API key with a fallback for Colab environment
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+except Exception:
+    try:
+        from google.colab import userdata
+        api_key = userdata.get("GROQ_API_KEY")
+    except Exception:
+        api_key = os.environ.get("GROQ_API_KEY", "")
 
-# Create the .streamlit directory and write secrets.toml if it doesn't exist
-os.makedirs("/content/.streamlit", exist_ok=True)
-with open("/content/.streamlit/secrets.toml", "w") as f:
-    f.write('GROQ_API_KEY = "	gsk_...OnGY"\n')
+if not api_key:
+    st.warning("⚠️ GROQ_API_KEY not found. Please set it in Streamlit Secrets, Colab Secrets, or as an environment variable.")
 
-# Note: Please replace 'YOUR_GROQ_API_KEY_HERE' with your actual Groq API key.
-# If you are using Colab Secrets (the key icon in the left sidebar), you can also do:
-# from google.colab import userdata
-# key = userdata.get('GROQ_API_KEY')
-
-# Load using streamlit secrets
-api_key = st.secrets["GROQ_API_KEY"]
 client = Groq(api_key=api_key)
 
-#Sentence Transformers=Converts Tokens into Numeric Vectors
 @st.cache_resource
 def load_embedding_model():
 
@@ -51,7 +49,6 @@ def load_embedding_model():
 
 embedding_model = load_embedding_model()
 
-#ChromaDB
 chroma_client = chromadb.PersistentClient(
     path="./chroma_db"
 )
@@ -60,7 +57,6 @@ collection = chroma_client.get_or_create_collection(
     name="knowmate_documents"
 )
 
-#pyPDF
 def extract_pdf_text(pdf_file):
 
     reader = PdfReader(pdf_file)
@@ -80,7 +76,6 @@ def extract_pdf_text(pdf_file):
 
     return documents
 
-#Split text into chunks
 def split_text(text, chunk_size=500, overlap=50):
 
     words = text.split()
@@ -99,7 +94,6 @@ def split_text(text, chunk_size=500, overlap=50):
 
     return chunks
 
-#Generate embeddings and store them
 def store_documents(pdf_files):
 
     documents = []
@@ -155,7 +149,6 @@ def store_documents(pdf_files):
 
     return len(documents)
 
-#Retrieve relevant information
 def retrieve_documents(question):
 
     query_embedding = embedding_model.encode(
@@ -169,7 +162,6 @@ def retrieve_documents(question):
 
     return results
 
-#Generate AI responses
 def generate_answer(question, context, history):
 
     messages = [
@@ -225,19 +217,19 @@ if st.button("Process Documents"):
 
     if uploaded_files:
 
-        with st.spinner("Processing documents..."):
+         with st.spinner("Processing documents..."):
 
             count = store_documents(
                 uploaded_files
             )
 
-        if count > 0:
+         if count > 0:
 
             st.success(
                 f"Successfully processed {count} chunks!"
             )
 
-        else:
+         else:
 
             st.warning(
                 "No readable text found in the PDFs."
@@ -314,4 +306,3 @@ if question:
         "role": "assistant",
         "content": answer
     })
-
