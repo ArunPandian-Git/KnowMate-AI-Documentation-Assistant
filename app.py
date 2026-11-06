@@ -1,12 +1,22 @@
-#Import libraries
-import chromadb
+# ==========================================
+# KNOWMATE AI - PDF QUESTION ANSWERING CHATBOT
+# ==========================================
+
+# 1. IMPORT LIBRARIES
+
 import streamlit as st
+import chromadb
 import hashlib
 import os
 
 from groq import Groq
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
+
+
+# ==========================================
+# 2. STREAMLIT CONFIGURATION
+# ==========================================
 
 st.set_page_config(
     page_title="KnowMate AI",
@@ -15,27 +25,68 @@ st.set_page_config(
 )
 
 st.title("🤖 KnowMate AI")
-st.subheader("Intelligent PDF Question Answering Chatbot")
+
+st.subheader(
+    "Intelligent PDF Question Answering Chatbot"
+)
 
 st.write(
     "Upload your PDF documents and ask questions "
     "using Artificial Intelligence."
 )
 
-# Safely load the Groq API key with a fallback for Colab environment
-try:
-    api_key = st.secrets["GROQ_API_KEY"]
-except Exception:
+
+# ==========================================
+# 3. GROQ API CONFIGURATION
+# ==========================================
+
+def get_groq_api_key():
+
     try:
-        from google.colab import userdata
-        api_key = userdata.get("GROQ_API_KEY")
+        return st.secrets["GROQ_API_KEY"]
+
     except Exception:
-        api_key = os.environ.get("GROQ_API_KEY", "")
+
+        return os.environ.get("GROQ_API_KEY", "")
+
+
+api_key = get_groq_api_key()
 
 if not api_key:
-    st.warning("⚠️ GROQ_API_KEY not found. Please set it in Streamlit Secrets, Colab Secrets, or as an environment variable.")
+
+    st.error(
+        "GROQ_API_KEY not found. "
+        "Configure your API key in Streamlit Secrets."
+    )
+
+    st.stop()
+
 
 client = Groq(api_key=api_key)
+
+
+# ==========================================
+# 4. LOAD EMBEDDING MODEL
+# ==========================================
+
+@st.cache_resource
+def load_embedding_model():
+
+    model = SentenceTransformer(
+        "all-MiniLM-L6-v2"
+    )
+
+    return model
+
+
+with st.spinner("Loading embedding model..."):
+
+    embedding_model = load_embedding_model()
+
+
+# ==========================================
+# 5. INITIALIZE CHROMADB
+# ==========================================
 
 @st.cache_resource
 def initialize_chromadb():
@@ -45,31 +96,40 @@ def initialize_chromadb():
     )
 
     collection = client.get_or_create_collection(
-        name="knowmate_documents"
+        name="knowmate_documents",
+        metadata={
+            "description": "KnowMate AI PDF document collection"
+        }
     )
 
     return client, collection
 
 
-chroma_client, collection = initialize_chromadb()
+try:
 
+    chroma_client, collection = initialize_chromadb()
 
-embedding_model = load_embedding_model()
+    st.success("ChromaDB initialized successfully!")
 
-chroma_client = chromadb.PersistentClient(
-    path="./chroma_db"
-)
+except Exception as e:
 
-collection = chroma_client.get_or_create_collection(
-    name="knowmate_documents"
-)
+    st.error(
+        f"ChromaDB initialization failed: {str(e)}"
+    )
 
-st.success("ChromaDB initialized successfully!")
+    st.stop()
+
 
 st.write(
-    "Total stored documents:",
+    "Total stored document chunks:",
     collection.count()
 )
+
+
+# ==========================================
+# 6. EXTRACT TEXT FROM PDF
+# ==========================================
+
 def extract_pdf_text(pdf_file):
 
     reader = PdfReader(pdf_file)
@@ -83,11 +143,19 @@ def extract_pdf_text(pdf_file):
         if text and text.strip():
 
             documents.append({
+
                 "text": text,
+
                 "page": page_number + 1
+
             })
 
     return documents
+
+
+# ==========================================
+# 7. SPLIT TEXT INTO CHUNKS
+# ==========================================
 
 def split_text(text, chunk_size=500, overlap=50):
 
@@ -95,7 +163,9 @@ def split_text(text, chunk_size=500, overlap=50):
 
     chunks = []
 
-    for i in range(0, len(words), chunk_size - overlap):
+    step = chunk_size - overlap
+
+    for i in range(0, len(words), step):
 
         chunk = " ".join(
             words[i:i + chunk_size]
@@ -107,10 +177,17 @@ def split_text(text, chunk_size=500, overlap=50):
 
     return chunks
 
+
+# ==========================================
+# 8. STORE DOCUMENTS IN CHROMADB
+# ==========================================
+
 def store_documents(pdf_files):
 
     documents = []
+
     metadatas = []
+
     ids = []
 
     for pdf_file in pdf_files:
@@ -128,194 +205,362 @@ def store_documents(pdf_files):
                 documents.append(chunk)
 
                 metadatas.append({
+
                     "source": pdf_file.name,
+
                     "page": page_data["page"]
+
                 })
 
                 unique_id = hashlib.md5(
+
                     f"{pdf_file.name}_{page_data['page']}_{index}".encode()
+
                 ).hexdigest()
 
                 ids.append(unique_id)
 
+
     if not documents:
+
         return 0
 
+
+    # Generate embeddings
+
     embeddings = embedding_model.encode(
-        documents
+        documents,
+        show_progress_bar=False
     ).tolist()
 
-    chroma_client.delete_collection(
-        "knowmate_documents"
-    )
 
-    new_collection = chroma_client.create_collection(
-        name="knowmate_documents"
-    )
+    # Remove existing records without recreating collection
 
-    new_collection.add(
+    existing_ids = collection.get()["ids"]
+
+    if existing_ids:
+
+        collection.delete(
+            ids=existing_ids
+        )
+
+
+    # Insert new documents
+
+    collection.add(
+
         ids=ids,
+
         documents=documents,
+
         embeddings=embeddings,
+
         metadatas=metadatas
+
     )
+
 
     return len(documents)
 
+
+# ==========================================
+# 9. RETRIEVE RELEVANT DOCUMENTS
+# ==========================================
+
 def retrieve_documents(question):
+
+    if collection.count() == 0:
+
+        return None
 
     query_embedding = embedding_model.encode(
         [question]
     ).tolist()
 
+
     results = collection.query(
+
         query_embeddings=query_embedding,
-        n_results=4
+
+        n_results=min(4, collection.count())
+
     )
 
     return results
 
+
+# ==========================================
+# 10. GENERATE ANSWER USING GROQ LLM
+# ==========================================
+
 def generate_answer(question, context, history):
 
     messages = [
+
         {
+
             "role": "system",
+
             "content": """
-            You are KnowMate AI, an intelligent document assistant.
+            You are KnowMate AI, an intelligent PDF
+            document question-answering assistant.
 
-            Answer questions using the provided document context.
+            Instructions:
 
-            If the answer is not available in the documents,
-            clearly tell the user.
-
-            Do not invent information.
+            1. Answer using the provided document context.
+            2. Do not invent information.
+            3. If the answer is unavailable, clearly say so.
+            4. Provide clear and understandable answers.
+            5. Use simple language.
             """
+
         }
+
     ]
+
+
+    # Include recent conversation history
 
     messages.extend(history[-6:])
 
+
     messages.append({
+
         "role": "user",
+
         "content": f"""
-        Document Context:
+
+        DOCUMENT CONTEXT:
 
         {context}
 
-        User Question:
+
+        USER QUESTION:
 
         {question}
 
-        Answer based on the document context.
+
+        Provide an answer based on the document context.
+
         """
+
     })
 
+
     response = client.chat.completions.create(
+
         model="llama-3.3-70b-versatile",
+
         messages=messages,
+
         temperature=0.3,
+
         max_tokens=1000
+
     )
+
 
     return response.choices[0].message.content
 
 
+# ==========================================
+# 11. PDF UPLOAD SECTION
+# ==========================================
+
+st.divider()
+
+st.header("📄 Upload Your Documents")
+
+
 uploaded_files = st.file_uploader(
+
     "Upload PDF Documents",
+
     type=["pdf"],
+
     accept_multiple_files=True
+
 )
 
-if st.button("Process Documents"):
+
+if st.button("🚀 Process Documents"):
 
     if uploaded_files:
 
-         with st.spinner("Processing documents..."):
+        try:
 
-            count = store_documents(
-                uploaded_files
+            with st.spinner(
+                "Extracting text and generating embeddings..."
+            ):
+
+                count = store_documents(
+                    uploaded_files
+                )
+
+
+            if count > 0:
+
+                st.success(
+
+                    f"Successfully processed {count} document chunks!"
+
+                )
+
+                st.session_state.messages = []
+
+            else:
+
+                st.warning(
+                    "No readable text found in the uploaded PDFs."
+                )
+
+
+        except Exception as e:
+
+            st.error(
+                f"Document processing failed: {str(e)}"
             )
 
-         if count > 0:
-
-            st.success(
-                f"Successfully processed {count} chunks!"
-            )
-
-         else:
-
-            st.warning(
-                "No readable text found in the PDFs."
-            )
 
     else:
 
-        st.warning("Please upload PDF documents.")
+        st.warning(
+            "Please upload at least one PDF document."
+        )
 
+
+# ==========================================
+# 12. CHAT HISTORY
+# ==========================================
 
 if "messages" not in st.session_state:
 
     st.session_state.messages = []
 
 
+st.divider()
+
+st.header("💬 Ask Questions About Your Documents")
+
+
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
 
-        st.markdown(message["content"])
+        st.markdown(
+            message["content"]
+        )
 
+
+# ==========================================
+# 13. USER QUESTION INPUT
+# ==========================================
 
 question = st.chat_input(
+
     "Ask something about your PDF documents..."
+
 )
 
 
 if question:
 
+    if collection.count() == 0:
+
+        st.warning(
+            "Please upload and process PDF documents first."
+        )
+
+        st.stop()
+
+
+    # Display user question
+
     st.session_state.messages.append({
+
         "role": "user",
+
         "content": question
+
     })
+
 
     with st.chat_message("user"):
 
         st.markdown(question)
 
+
+    # Generate AI response
+
     with st.chat_message("assistant"):
 
-        with st.spinner("Thinking..."):
+        with st.spinner("KnowMate AI is thinking..."):
 
-            results = collection.query(
-                query_embeddings=embedding_model.encode(
-                    [question]
-                ).tolist(),
-                n_results=4
-            )
+            try:
 
-            retrieved_texts = results["documents"][0]
+                # Retrieve documents
 
-            metadata = results["metadatas"][0]
-
-            context = "\n\n".join(retrieved_texts)
-
-            answer = generate_answer(
-                question,
-                context,
-                st.session_state.messages[:-1]
-            )
-
-            st.markdown(answer)
-
-            st.markdown("**Sources:**")
-
-            for item in metadata:
-
-                st.write(
-                    f"📄 {item['source']} - "
-                    f"Page {item['page']}"
+                results = retrieve_documents(
+                    question
                 )
 
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": answer
-    })
+
+                retrieved_texts = results["documents"][0]
+
+                metadata = results["metadatas"][0]
+
+
+                # Combine retrieved context
+
+                context = "\n\n".join(
+                    retrieved_texts
+                )
+
+
+                # Generate answer
+
+                answer = generate_answer(
+
+                    question,
+
+                    context,
+
+                    st.session_state.messages[:-1]
+
+                )
+
+
+                st.markdown(answer)
+
+
+                # Display sources
+
+                st.markdown("### 📚 Sources")
+
+
+                for item in metadata:
+
+                    st.write(
+
+                        f"📄 {item['source']} "
+                        f"- Page {item['page']}"
+
+                    )
+
+
+                # Save assistant response
+
+                st.session_state.messages.append({
+
+                    "role": "assistant",
+
+                    "content": answer
+
+                })
+
+
+            except Exception as e:
+
+                st.error(
+                    f"Error generating answer: {str(e)}"
+                )
