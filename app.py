@@ -38,13 +38,20 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 @st.cache_resource
-def load_embedding_model():
+def initialize_chromadb():
 
-    model = SentenceTransformer(
-        "all-MiniLM-L6-v2"
+    client = chromadb.PersistentClient(
+        path="./chroma_db"
     )
 
-    return model
+    collection = client.get_or_create_collection(
+        name="knowmate_documents"
+    )
+
+    return client, collection
+
+
+chroma_client, collection = initialize_chromadb()
 
 
 embedding_model = load_embedding_model()
@@ -57,6 +64,12 @@ collection = chroma_client.get_or_create_collection(
     name="knowmate_documents"
 )
 
+st.success("ChromaDB initialized successfully!")
+
+st.write(
+    "Total stored documents:",
+    collection.count()
+)
 def extract_pdf_text(pdf_file):
 
     reader = PdfReader(pdf_file)
