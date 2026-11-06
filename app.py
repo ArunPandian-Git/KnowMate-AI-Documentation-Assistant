@@ -104,27 +104,36 @@ def initialize_chromadb():
 
     return client, collection
 
+@st.cache_resource
+def initialize_chromadb():
 
-try:
+    try:
 
-    chroma_client, collection = initialize_chromadb()
+        client = chromadb.PersistentClient(
+            path="/tmp/knowmate_chroma_db"
+        )
 
-    st.success("ChromaDB initialized successfully!")
+        collection = client.get_or_create_collection(
+            name="knowmate_documents"
+        )
 
-except Exception as e:
+        return client, collection
 
-    st.error(
-        f"ChromaDB initialization failed: {str(e)}"
-    )
+    except Exception as e:
 
-    st.stop()
+        st.error(f"ChromaDB Error: {repr(e)}")
 
+        st.stop()
+
+
+chroma_client, collection = initialize_chromadb()
 
 st.write(
     "Total stored document chunks:",
     collection.count()
 )
 
+st.write("ChromaDB Version:", chromadb.__version__)
 
 # ==========================================
 # 6. EXTRACT TEXT FROM PDF
