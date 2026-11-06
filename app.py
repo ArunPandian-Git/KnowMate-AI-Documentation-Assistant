@@ -43,11 +43,11 @@ st.write(
 def get_groq_api_key():
 
     try:
-        return st.secrets["Knowmate AI"]
+        return st.secrets["GROQ_API_KEY"]
 
     except Exception:
 
-        return os.environ.get("Knowmate AI", "")
+        return os.environ.get("GROQ_API_KEY", "")
 
 
 api_key = get_groq_api_key()
