@@ -1,6 +1,6 @@
 #Import libraries
-import streamlit as st
 import chromadb
+import streamlit as st
 import hashlib
 import os
 
