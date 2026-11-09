@@ -35,29 +35,44 @@ st.write(
     "using Artificial Intelligence."
 )
 
-
 # ==========================================
-# 3. GROQ API CONFIGURATION
+# GROQ API CONFIGURATION
 # ==========================================
 
 def get_groq_api_key():
 
     try:
-        return st.secrets["GROQ_API_KEY"]
+        api_key = st.secrets.get("GROQ_API_KEY", "")
 
     except Exception:
+        api_key = os.environ.get("GROQ_API_KEY", "")
 
-        return os.environ.get("GROQ_API_KEY", "")
+    return api_key.strip() if api_key else ""
 
 
 api_key = get_groq_api_key()
 
 if not api_key:
 
-    st.error(
-        "GROQ_API_KEY not found. "
-        "Configure your API key in Streamlit Secrets."
-    )
+    st.error("Groq API key is missing.")
+
+    st.stop()
+
+
+if not api_key.startswith("gsk_"):
+
+    st.error("Invalid Groq API key format.")
+
+    st.stop()
+
+
+try:
+
+    client = Groq(api_key=api_key)
+
+except Exception as e:
+
+    st.error(f"Groq initialization failed: {e}")
 
     st.stop()
 
@@ -83,57 +98,36 @@ with st.spinner("Loading embedding model..."):
 
     embedding_model = load_embedding_model()
 
-
 # ==========================================
-# 5. INITIALIZE CHROMADB
+# INITIALIZE CHROMADB
 # ==========================================
-
-@st.cache_resource
-def initialize_chromadb():
-
-    client = chromadb.PersistentClient(
-        path="./chroma_db"
-    )
-
-    collection = client.get_or_create_collection(
-        name="knowmate_documents",
-        metadata={
-            "description": "KnowMate AI PDF document collection"
-        }
-    )
-
-    return client, collection
 
 @st.cache_resource
 def initialize_chromadb():
 
     try:
 
-        client = chromadb.PersistentClient(
-            path="/tmp/knowmate_chroma_db"
+        chroma_client = chromadb.PersistentClient(
+            path="./chroma_db"
         )
 
-        collection = client.get_or_create_collection(
-            name="knowmate_documents"
+        collection = chroma_client.get_or_create_collection(
+            name="knowmate_documents",
+            metadata={
+                "description": "KnowMate AI PDF documents"
+            }
         )
 
-        return client, collection
+        return chroma_client, collection
 
     except Exception as e:
 
-        st.error(f"ChromaDB Error: {repr(e)}")
+        st.error(f"ChromaDB initialization failed: {e}")
 
         st.stop()
 
 
 chroma_client, collection = initialize_chromadb()
-
-st.write(
-    "Total stored document chunks:",
-    collection.count()
-)
-
-st.write("ChromaDB Version:", chromadb.__version__)
 
 # ==========================================
 # 6. EXTRACT TEXT FROM PDF
