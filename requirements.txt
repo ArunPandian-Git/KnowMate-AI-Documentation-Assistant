@@ -1,6 +1,0 @@
-streamlit
-chromadb==1.5.9
-groq
-pypdf
-sentence-transformers
-torch
