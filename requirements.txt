@@ -1,0 +1,8 @@
+streamlit>=1.36,<2
+chromadb>=0.5.23,<2
+groq>=0.11,<2
+pypdf>=5,<7
+sentence-transformers>=3,<6
+python-docx>=1.1,<2
+numpy>=1.26,<3
+pandas>=2.1,<4
