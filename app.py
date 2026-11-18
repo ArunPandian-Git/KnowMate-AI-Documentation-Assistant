@@ -8,7 +8,7 @@ Upload -> Extract -> Chunk -> Embed -> ChromaDB -> Retrieve -> Groq -> Cited ans
 Secrets:
   GROQ_API_KEY = "your-key"
 Optional environment variables:
-  GROQ_MODEL=llama-3.3-70b-versatile
+  GROQ_MODEL="openai/gpt-oss-120b"
   EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
   CHROMA_PATH=./chroma_db
 """
