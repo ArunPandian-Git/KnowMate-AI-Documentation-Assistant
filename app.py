@@ -43,7 +43,7 @@ APP_VERSION = "3.0 Premium"
 EMBEDDING_MODEL = os.getenv(
     "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
 )
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"")
 CHROMA_PATH = os.getenv("CHROMA_PATH", "./chroma_db")
 COLLECTION_NAME = "knowmate_documents"
 MAX_FILE_MB = int(os.getenv("MAX_FILE_MB", "30"))
